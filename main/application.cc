@@ -594,6 +594,22 @@ void Application::InitializeProtocol() {
                     ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
                 }
             }
+        } else if (strcmp(type->valuestring, "camera") == 0) {
+            // 主动拍照：服务器下发拍照指令（专注力检测用）
+            auto command = cJSON_GetObjectItem(root, "command");
+            if (cJSON_IsString(command) && strcmp(command->valuestring, "take_photo") == 0) {
+                Schedule([this]() {
+                    auto camera = Board::GetInstance().GetCamera();
+                    if (camera) {
+                        try {
+                            camera->Capture();
+                            camera->Explain("");
+                        } catch (...) {
+                            ESP_LOGW(TAG, "Proactive take_photo failed");
+                        }
+                    }
+                });
+            }
         } else if (strcmp(type->valuestring, "alert") == 0) {
             auto status = cJSON_GetObjectItem(root, "status");
             auto message = cJSON_GetObjectItem(root, "message");
