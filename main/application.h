@@ -15,6 +15,7 @@
 #include "protocol.h"
 #include "ota.h"
 #include "audio_service.h"
+#include "beat_detector.h"
 #include "device_state.h"
 #include "device_state_machine.h"
 
@@ -118,6 +119,13 @@ public:
     AudioService& GetAudioService() { return audio_service_; }
 
     /**
+     * 音乐律动模式开关（跟拍点头）。开：周期读麦克风检测节拍，检测到就驱动舵机点头；
+     * 关：停止律动，恢复正常。律动和语音对话互斥（律动开着时不做语音识别）。
+     */
+    void SetBeatMode(bool enabled);
+    bool IsBeatMode() const { return beat_mode_; }
+
+    /**
      * Reset protocol resources (thread-safe)
      * Can be called from any task to release resources allocated after network connected
      * This includes closing audio channel, resetting protocol and ota objects
@@ -139,6 +147,11 @@ private:
     std::string last_error_message_;
     AudioService audio_service_;
     std::unique_ptr<Ota> ota_;
+
+    // 音乐律动
+    BeatDetector beat_detector_;
+    bool beat_mode_ = false;
+    esp_timer_handle_t beat_timer_ = nullptr;
 
     std::function<void(const std::string&)> mcp_broadcast_callback_;
 

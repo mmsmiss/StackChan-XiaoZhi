@@ -82,8 +82,13 @@ public:
     virtual void SetPowerSaveLevel(PowerSaveLevel level) = 0;
     virtual std::string GetBoardJson() = 0;
     virtual std::string GetDeviceStatusJson() = 0;
-    virtual void PauseFaceTracking() {}
-    virtual void ResumeFaceTracking() {}
+
+    /**
+     * 音乐律动模式（跟拍点头）。只有带舵机的板子（如 M5Stack CoreS3）实现，
+     * 其他板子用默认空实现，不受影响。
+     */
+    virtual void SetBeatMode(bool enabled) { (void)enabled; }
+    virtual void OnBeatDetected() {}
 };
 
 #define DECLARE_BOARD(BOARD_CLASS_NAME) \

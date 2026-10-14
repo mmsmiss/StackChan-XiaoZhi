@@ -21,3 +21,4 @@ mmap_generate_*.h
 .github/
 .reasonix/
 .claude/
+*.servo-backup

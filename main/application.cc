@@ -98,6 +98,20 @@ void Application::Initialize() {
     mcp_server.AddCommonTools();
     mcp_server.AddUserOnlyTools();
 
+    // 音乐律动开关（跟拍点头）：说「打开律动/开始律动/跟我跳舞」开，「关闭律动/停止律动」关
+    mcp_server.AddTool("self.rhythm.set_mode",
+        "Toggle the music rhythm mode (beat-following nod). When enabled, the robot listens to surrounding music and nods its head to the beat. "
+        "Use this when the user says things like '打开律动', '开始律动', '跟着音乐动', '跟我跳舞' (set enabled=1), "
+        "or '关闭律动', '停止律动', '别动了' (set enabled=0).",
+        PropertyList({
+            Property("enabled", kPropertyTypeInteger, 0, 1)
+        }),
+        [this](const PropertyList& props) -> ReturnValue {
+            bool enabled = props["enabled"].value<int>() != 0;
+            SetBeatMode(enabled);
+            return true;
+        });
+
     // Set network event callback for UI updates and network state handling
     board.SetNetworkEventCallback([this](NetworkEvent event, const std::string& data) {
         auto display = Board::GetInstance().GetDisplay();
@@ -288,7 +302,7 @@ void Application::HandleNetworkDisconnectedEvent() {
     auto state = GetDeviceState();
     if (state == kDeviceStateConnecting || state == kDeviceStateListening || state == kDeviceStateSpeaking) {
         ESP_LOGI(TAG, "Closing audio channel due to network disconnection");
-        if (protocol_) protocol_->CloseAudioChannel();
+        protocol_->CloseAudioChannel();
     }
 
     // Update the status bar immediately to show the network state
@@ -954,6 +968,38 @@ void Application::SetListeningMode(ListeningMode mode) {
 
 ListeningMode Application::GetDefaultListeningMode() const {
     return aec_mode_ == kAecOff ? kListeningModeAutoStop : kListeningModeRealtime;
+}
+
+void Application::SetBeatMode(bool enabled) {
+    beat_mode_ = enabled;
+    Board::GetInstance().SetBeatMode(enabled);
+
+    if (enabled) {
+        if (beat_timer_ == nullptr) {
+            esp_timer_create_args_t args = {};
+            args.callback = [](void* arg) {
+                auto* self = static_cast<Application*>(arg);
+                if (!self->beat_mode_) return;
+                // 检测到有人说话 → 暂停律动（对话时别乱点头）
+                if (self->audio_service_.IsVoiceDetected()) return;
+                std::vector<int16_t> data;
+                // 律动模式下读麦克风做节拍检测（和语音对话互斥，律动开着时不走语音链路）
+                if (!self->audio_service_.ReadAudioData(data, 16000, 512)) return;
+                if (self->beat_detector_.Process(data)) {
+                    Board::GetInstance().OnBeatDetected();
+                }
+            };
+            args.arg = this;
+            args.dispatch_method = ESP_TIMER_TASK;
+            args.name = "beat_tick";
+            args.skip_unhandled_events = true;
+            esp_timer_create(&args, &beat_timer_);
+        }
+        esp_timer_start_periodic(beat_timer_, 32000);  // 32ms = 512 样本 @16kHz
+    } else {
+        if (beat_timer_) esp_timer_stop(beat_timer_);
+        beat_detector_.Reset();
+    }
 }
 
 void Application::Reboot() {
