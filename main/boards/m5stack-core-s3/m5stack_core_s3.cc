@@ -590,8 +590,7 @@ private:
         lv_layer_t layer;
         lv_canvas_init_layer(canvas_, &layer);
 
-        // Grok 紫粉球体（脸）
-        FillCircle(&layer, 160, 115, 70, lv_color_make(0xEC, 0x48, 0x99));
+        DrawMouth(&layer, fg, bg);
         DrawEye(&layer, fg, bg, false);
         DrawEye(&layer, fg, bg, true);
         DrawOverlay(&layer, fg, bg);
@@ -758,52 +757,117 @@ private:
         GetGazeOverride(&gh, &gv);
         const int off_x = (int)(gh * 3.0f);
         const int off_y = (int)(gv * 3.0f);
-        const int cx = cx_base + off_x;
-        const int cy2 = cy + off_y;
 
         if (overlay_.heart_eyes) {
             const lv_color_t red = lv_color_make(0xFF, 0x40, 0x70);
-            FillRoundRect(layer, cx - 10, cy2 - 7, 12, 14, 5, red);
-            FillRoundRect(layer, cx + 3, cy2 - 7, 12, 14, 5, red);
+            int hcx = cx_base + off_x;
+            int hcy = cy + off_y;
+            FillCircle(layer, hcx - 6, hcy - 3, 7, red);
+            FillCircle(layer, hcx + 6, hcy - 3, 7, red);
+            FillTriangle(layer, hcx - 12, hcy + 1, hcx + 12, hcy + 1, hcx, hcy + 13, red);
             return;
         }
 
-        // Grok 风格：圆角方形眼睛，通过尺寸/开合/眯眼表达情绪
-        bool line_eye = false;
-        if (expression_ == Expression::Sleepy) line_eye = true;
-        if (expression_ == Expression::Winking && is_left) line_eye = true;
-
-        int w = 16, h = 16, rad = 4;
-        switch (expression_) {
-            case Expression::Happy:
-            case Expression::Kissy:
-            case Expression::Funny:
-            case Expression::Delicious:
-                w = 22; h = 22; rad = 7; break;
-            case Expression::Shocked: w = 26; h = 26; rad = 8; break;
-            case Expression::Surprised: w = 24; h = 24; rad = 7; break;
-            case Expression::Confused: w = is_left ? 18 : 14; h = 14; rad = 4; break;
-            case Expression::Relaxed: w = 16; h = 10; rad = 3; break;
-            case Expression::Laughing: w = 18; h = 12; rad = 4; break;
-            case Expression::Embarrassed: w = 18; h = 6; rad = 3; break;
-            default: break;
-        }
-
-        if (line_eye) {
-            DrawLine(layer, cx - 8, cy2, cx + 8, cy2, 4, true, fg);
+        if (expression_ == Expression::Shocked) {
+            FillCircle(layer, cx_base, cy, 13, fg);
+            FillCircle(layer, cx_base, cy, 3, bg);
             return;
         }
 
-        int eh = (int)(h * eye_open_ratio_);
-        if (eh <= 0) eh = 2;
-        FillRoundRect(layer, cx - w / 2, cy2 - eh / 2, w, eh, rad, fg);
+        if (expression_ == Expression::Surprised) {
+            FillCircle(layer, cx_base, cy, 10, fg);
+            return;
+        }
 
-        if (expression_ == Expression::Angry || expression_ == Expression::Sad || expression_ == Expression::Crying) {
-            bool sad = (expression_ == Expression::Sad || expression_ == Expression::Crying);
-            int x0 = cx - w / 2, y0 = cy2 - eh / 2;
-            int x1 = x0 + w, y1 = y0;
-            int x2 = ((!is_left) != (!sad)) ? x0 : x1;
-            FillTriangle(layer, x0, y0, x1, y1, x2, y0 + eh, bg);
+        if (expression_ == Expression::Confused) {
+            int r = is_left ? 8 : 6;
+            FillCircle(layer, cx_base + off_x, cy + off_y, r, fg);
+            return;
+        }
+
+        if (expression_ == Expression::Winking) {
+            if (is_left) {
+                DrawLine(layer, cx_base + 8, cy - 4, cx_base - 8, cy, 5, true, fg);
+                DrawLine(layer, cx_base - 8, cy, cx_base + 8, cy + 4, 5, true, fg);
+            } else {
+                FillCircle(layer, cx_base, cy, 8, fg);
+            }
+            return;
+        }
+
+        if (expression_ == Expression::Silly) {
+            int r = 8;
+            FillCircle(layer, cx_base + off_x, cy + off_y, r, fg);
+            int x0 = cx_base + off_x - r;
+            int y0 = cy + off_y;
+            int w = r * 2 + 4;
+            int h = r + 2;
+            if (!is_left) h += 2;
+            FillCircle(layer, cx_base + off_x, cy + off_y, (int)(r / 1.5f), bg);
+            FillRect(layer, x0, y0, w, h, bg);
+            return;
+        }
+
+        if (expression_ == Expression::Laughing) {
+            int r = 8;
+            FillCircle(layer, cx_base + off_x, cy + off_y, r, fg);
+            int x0 = cx_base + off_x - r - 2;
+            int y0 = cy + off_y;
+            int w = r * 2 + 8;
+            int h = r + 4;
+            FillCircle(layer, cx_base + off_x, cy + off_y, (int)(r / 1.5f), bg);
+            FillRect(layer, x0, y0, w, h, bg);
+            return;
+        }
+
+        if (expression_ == Expression::Sleepy) {
+            if (is_left) {
+                DrawLine(layer, cx_base - 8 + off_x, cy - 2 + off_y,
+                                cx_base + 8 + off_x, cy + 2 + off_y, 4, true, fg);
+            } else {
+                DrawLine(layer, cx_base - 8 + off_x, cy + 2 + off_y,
+                                cx_base + 8 + off_x, cy - 2 + off_y, 4, true, fg);
+            }
+            return;
+        }
+
+        if (expression_ == Expression::Relaxed) {
+            int r = 8;
+            FillCircle(layer, cx_base + off_x, cy + off_y, r, fg);
+            int x0 = cx_base + off_x - r - 1;
+            int y0 = cy + off_y - 1;
+            int w = r * 2 + 6;
+            int h = r + 3;
+            FillCircle(layer, cx_base + off_x, cy + off_y, (int)(r / 1.5f), bg);
+            FillRect(layer, x0, y0, w, h, bg);
+            return;
+        }
+
+        const int r = 8;
+
+        if (eye_open_ratio_ > 0) {
+            FillCircle(layer, cx_base + off_x, cy + off_y, r, fg);
+
+            if (expression_ == Expression::Angry || expression_ == Expression::Sad || expression_ == Expression::Crying) {
+                int x0 = cx_base + off_x - r;
+                int y0 = cy + off_y - r;
+                int x1 = x0 + r * 2;
+                int y1 = y0;
+                bool sad = (expression_ == Expression::Sad || expression_ == Expression::Crying);
+                int x2 = ((!is_left) != (!sad)) ? x0 : x1;
+                int y2 = y0 + r;
+                FillTriangle(layer, x0, y0, x1, y1, x2, y2, bg);
+            }
+
+            if (expression_ == Expression::Happy
+                || expression_ == Expression::Kissy || expression_ == Expression::Funny
+                || expression_ == Expression::Delicious) {
+                FillCircle(layer, cx_base + off_x, cy + off_y, r + 2, bg);
+                DrawArc(layer, cx_base + off_x, cy + off_y + r,
+                        r, 180, 360, 3, fg, true);
+            }
+        } else {
+            FillRect(layer, cx_base - r + off_x, cy - 2 + off_y, r * 2, 4, fg);
         }
     }
 
