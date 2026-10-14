@@ -53,7 +53,6 @@ dependencies:
   waveshare/esp_lcd_touch_cst9217: ^1.0.3
   espressif/esp_lcd_touch_cst816s: ^1
   lvgl/lvgl: ==9.5.0
-  lvgl/lv_lib_freetype: "*"
   esp_lvgl_port: ==2.7.2
   espressif/esp_io_expander_tca95xx_16bit: ^2.0.0
   espressif2022/image_player: ^1.1.1
