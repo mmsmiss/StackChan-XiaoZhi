@@ -590,7 +590,8 @@ private:
         lv_layer_t layer;
         lv_canvas_init_layer(canvas_, &layer);
 
-        DrawMouth(&layer, fg, bg);
+        // Grok 紫粉球体（脸）
+        FillCircle(&layer, 160, 115, 70, lv_color_make(0xEC, 0x48, 0x99));
         DrawEye(&layer, fg, bg, false);
         DrawEye(&layer, fg, bg, true);
         DrawOverlay(&layer, fg, bg);
@@ -846,7 +847,9 @@ private:
         const int r = 8;
 
         if (eye_open_ratio_ > 0) {
-            FillCircle(layer, cx_base + off_x, cy + off_y, r, fg);
+            int ew = r * 2;
+            int eh = (int)(r * 2 * eye_open_ratio_);
+            FillRoundRect(layer, cx_base + off_x - ew / 2, cy + off_y - eh / 2, ew, eh, 4, fg);
 
             if (expression_ == Expression::Angry || expression_ == Expression::Sad || expression_ == Expression::Crying) {
                 int x0 = cx_base + off_x - r;
