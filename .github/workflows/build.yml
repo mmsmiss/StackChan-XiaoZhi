@@ -14,6 +14,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Upgrade idf-component-manager
+        run: pip install --upgrade "idf-component-manager>=2.4.7"
+
       - name: Build firmware
         run: |
           . $IDF_PATH/export.sh
