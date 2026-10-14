@@ -17,7 +17,7 @@ jobs:
       - name: Build firmware
         run: |
           . $IDF_PATH/export.sh
-          python3 -m pip install --upgrade "idf-component-manager>=2.4.7"
+          python3 -m pip install --upgrade "idf-component-manager>=2.4.7,<3.0"
           idf.py set-target esp32s3
           idf.py build
 
