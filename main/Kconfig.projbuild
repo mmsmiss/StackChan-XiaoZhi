@@ -983,3 +983,9 @@ menu "TAIJIPAI_S3_CONFIG"
 endmenu
 
 endmenu
+
+# LVGL 9.5 移除了 LV_USE_FREETYPE，但部分组件的 manifest 仍以它作为 if 条件，
+# 这里补一个兼容定义（默认关闭，本项目不需要 FreeType 字体渲染）
+config LV_USE_FREETYPE
+    bool "LVGL FreeType support (compat shim)"
+    default n
