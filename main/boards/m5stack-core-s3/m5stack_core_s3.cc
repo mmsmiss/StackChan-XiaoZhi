@@ -1758,8 +1758,16 @@ private:
     }
 
     void InitializePowerSaveTimer() {
-        power_save_timer_ = new PowerSaveTimer(-1, 30, -1);
+        power_save_timer_ = new PowerSaveTimer(-1, 60, 360);
         power_save_timer_->OnEnterSleepMode([this]() {
+            // 浅睡：打呼噜表情（屏幕还亮，唤醒词还开）
+            auto display = GetDisplay();
+            if (display) {
+                display->SetEmotion("sleepy");
+            }
+        });
+        power_save_timer_->OnShutdownRequest([this]() {
+            // 深睡：熄屏 + 停舵机 + 关 LED（操作幂等，可重复）
             GetDisplay()->SetPowerSaveMode(true);
             GetBacklight()->SetBrightness(0);
             servo_.PauseScan();
@@ -1772,14 +1780,16 @@ private:
             GetDisplay()->SetPowerSaveMode(false);
             GetBacklight()->RestoreBrightness();
             servo_.ResumeScan();
+            auto display = GetDisplay();
+            if (display) {
+                display->SetEmotion("idle");
+            }
             if (py32_dev_) {
                 uint16_t neutral = Rgb888To565(60, 35, 10);
                 uint16_t colors[12];
                 for (int i = 0; i < 12; i++) colors[i] = neutral;
                 Py32SetLedFrame(colors, 12);
             }
-        });
-        power_save_timer_->OnShutdownRequest([this]() {
         });
         power_save_timer_->SetEnabled(true);
     }
