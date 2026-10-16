@@ -1883,7 +1883,7 @@ private:
             servo_.ResumeScan();
             auto display = GetDisplay();
             if (display) {
-                display->SetEmotion("idle");
+                display->SetEmotion("neutral");
             }
             if (py32_dev_) {
                 uint16_t neutral = Rgb888To565(60, 35, 10);
@@ -2187,7 +2187,7 @@ private:
                     bool new_beat = !app.IsBeatMode();
                     app.SetBeatMode(new_beat);
                     // 反馈：表情变化提示律动开/关
-                    static_cast<M5StackAvatarDisplay*>(display_)->SetEmotion(new_beat ? "happy" : "idle");
+                    static_cast<M5StackAvatarDisplay*>(display_)->SetEmotion(new_beat ? "happy" : "neutral");
                 } else if (pending_single_release && (now - pending_single_release_time) <= DOUBLE_CLICK_MS) {
                     // 第二次点击落在窗口内 → 先记"双击"，等第三次判定是否三击
                     pending_single_release = false;
@@ -2427,7 +2427,8 @@ public:
         if (level != PowerSaveLevel::LOW_POWER) {
             power_save_timer_->WakeUp();
         }
-        WifiBoard::SetPowerSaveLevel(level);
+        // 联网优先：WiFi 始终保持全速，避免从省电状态唤醒时下行丢包导致首次连接超时
+        WifiBoard::SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
     }
 
     virtual Backlight *GetBacklight() override {

@@ -26,4 +26,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: build/merged-binary.bin
+          path: |
+            build/merged-binary.bin
+            build/flash_args
+            build/*.bin
+            build/bootloader/*.bin
+            build/partition_table/*.bin
