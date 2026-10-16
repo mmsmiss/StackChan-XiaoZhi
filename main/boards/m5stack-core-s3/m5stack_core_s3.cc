@@ -24,6 +24,7 @@
 #include "i2c_bus.h"
 #include "bmi270_api.h"
 #include "bmi2.h"
+#include "grok_geometry.h"
 
 // BMI270 SDK 在 .a 里有这些 public 符号但头文件未暴露——自己声明用来绕过 bmi270_sensor_create 硬编码 0x68 的限制
 extern "C" {
@@ -465,7 +466,13 @@ public:
 
     bool IsReady() const { return canvas_ != nullptr; }
 
-    void SetExpression(Expression e) { expression_ = e; }
+    void SetExpression(Expression e) {
+        if (e != expression_) {
+            expression_ = e;
+            pool_idx_ = 0;
+            pool_switch_ms_ = lv_tick_get();
+        }
+    }
     void SetOverlay(const Overlay& o) { overlay_ = o; }
     void StartSpeaking(uint32_t duration_ms) {
         speaking_until_ms_ = lv_tick_get() + duration_ms;
@@ -578,24 +585,114 @@ private:
             mouth_open_ = 0.0f;
         }
 
+        /* Grok 眼环池轮播：按表情自带的切换时长在池内轮转 */
+        {
+            const grok_emotion_t& em = GrokEmotion();
+            if (em.pool_len > 1 && now - pool_switch_ms_ >= em.transition) {
+                pool_idx_ = (pool_idx_ + 1) % em.pool_len;
+                pool_switch_ms_ = now;
+            }
+        }
+
         Draw();
     }
 
     void Draw() {
         if (!canvas_) return;
         const lv_color_t bg = lv_color_make(0x00, 0x00, 0x00);
-        const lv_color_t fg = lv_color_make(0xFF, 0xFF, 0xFF);
 
         lv_canvas_fill_bg(canvas_, bg, LV_OPA_COVER);
         lv_layer_t layer;
         lv_canvas_init_layer(canvas_, &layer);
 
-        DrawMouth(&layer, fg, bg);
-        DrawEye(&layer, fg, bg, false);
-        DrawEye(&layer, fg, bg, true);
-        DrawOverlay(&layer, fg, bg);
+        DrawGrok(&layer);
 
         lv_canvas_finish_layer(canvas_, &layer);
+    }
+
+    /* ==================== Grok 球体形象 ==================== */
+
+    static lv_color_t C565(uint16_t c) {
+        return lv_color_make((uint8_t)(((c >> 11) & 0x1F) * 255 / 31),
+                             (uint8_t)(((c >> 5) & 0x3F) * 255 / 63),
+                             (uint8_t)((c & 0x1F) * 255 / 31));
+    }
+
+    /* Grok 1/1000 单位 → 屏幕像素：球心(114270,114270)→(160,120)，半径 114270→114px */
+    static int Gx(int32_t v) { return 160 + (int)((v - GROK_HEAD_C) * 114 / 114270); }
+    static int Gy(int32_t v) { return 120 + (int)((v - GROK_HEAD_C) * 114 / 114270); }
+
+    /* 从质心做扇形三角剖分填充多边形（眼型均为星形域，此法正确） */
+    void FillPoly(lv_layer_t* layer, const int32_t (*pts)[2], int n, lv_color_t c) {
+        if (n < 3) return;
+        int32_t sx = 0, sy = 0;
+        for (int i = 0; i < n; i++) { sx += pts[i][0]; sy += pts[i][1]; }
+        const int scx = Gx(sx / n), scy = Gy(sy / n);
+        for (int i = 0; i < n; i++) {
+            const int j = (i + 1) % n;
+            FillTriangle(layer, scx, scy,
+                         Gx(pts[i][0]), Gy(pts[i][1]),
+                         Gx(pts[j][0]), Gy(pts[j][1]), c);
+        }
+    }
+
+    /* 固件表情 → Grok 表情 ID */
+    uint8_t GrokEmotionId() const {
+        switch (expression_) {
+            case Expression::Neutral:     return 2;   /* 待机放空 */
+            case Expression::Happy:       return 10;  /* 开心 */
+            case Expression::Angry:       return 21;  /* 生气 */
+            case Expression::Sad:         return 12;  /* 失落 */
+            case Expression::Sleepy:      return 0;   /* 睡眠 */
+            case Expression::Loving:      return 19;  /* 满意 */
+            case Expression::Crying:      return 12;
+            case Expression::Kissy:       return 14;  /* 害羞 */
+            case Expression::Cool:        return 19;
+            case Expression::Confident:   return 19;
+            case Expression::Shocked:     return 13;  /* 惊讶 */
+            case Expression::Thinking:    return 30;  /* 思考中 */
+            case Expression::Surprised:   return 13;
+            case Expression::Confused:    return 20;  /* 困惑 */
+            case Expression::Embarrassed: return 14;
+            case Expression::Silly:       return 10;
+            case Expression::Winking:     return 10;
+            case Expression::Laughing:    return 10;
+            case Expression::Funny:       return 10;
+            case Expression::Relaxed:     return 2;
+            case Expression::Delicious:   return 19;
+            default:                      return 2;
+        }
+    }
+
+    const grok_emotion_t& GrokEmotion() const {
+        const uint8_t want = GrokEmotionId();
+        for (int i = 0; i < GROK_EMOTION_COUNT; i++)
+            if (grok_emotions[i].id == want) return grok_emotions[i];
+        return grok_emotions[2];  /* 兜底：待机放空 */
+    }
+
+    int GrokRingIndex() const {
+        const grok_emotion_t& em = GrokEmotion();
+        const int len = em.pool_len ? em.pool_len : 1;
+        int r = em.pool[pool_idx_ % len];
+        if (r < 0 || r >= GROK_RING_COUNT) r = 0;
+        return r;
+    }
+
+    void DrawGrok(lv_layer_t* layer) {
+        const grok_emotion_t& em = GrokEmotion();
+        const lv_color_t body = (em.color_rgb565 == 0)
+                                    ? lv_color_make(0xEE, 0xEB, 0xE4)
+                                    : C565(em.color_rgb565);
+        const lv_color_t eye = lv_color_make(0x00, 0x00, 0x00);
+
+        /* 球体（几何为圆，直接用圆绘制） */
+        FillCircle(layer, 160, 120, 114, body);
+
+        /* 双眼（48 点闭合路径填充） */
+        const int ri = GrokRingIndex();
+        FillPoly(layer, grok_eye_rings[ri][0], GROK_EYE_POINTS, eye);
+        FillPoly(layer, grok_eye_rings[ri][1], GROK_EYE_POINTS, eye);
     }
 
     void FillRect(lv_layer_t* layer, int x, int y, int w, int h, lv_color_t c) {
@@ -977,6 +1074,10 @@ private:
 
     Expression expression_ = Expression::Neutral;
     Overlay overlay_;
+
+    /* Grok 球体形象状态 */
+    int      pool_idx_ = 0;        /* 眼环池当前下标 */
+    uint32_t pool_switch_ms_ = 0;  /* 上次切换眼环的时刻 */
 
     uint32_t tick_count_ = 0;
     uint32_t next_blink_ms_ = 0;
