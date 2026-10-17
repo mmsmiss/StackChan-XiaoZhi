@@ -1806,8 +1806,7 @@ private:
     void RegisterFocusMcpTool() {
         auto& mcp = McpServer::GetInstance();
         mcp.AddTool("self.focus.start",
-            "开始专注力监测（作业时间）：机器人会每 30 秒拍一张照片，分析孩子是否在专注写作业。"
-            "当用户说\"作业时间\"、\"开始作业时间\"、\"写作业时间\"、\"开始专注力监测\"、\"监督我学习\"时调用。",
+            "开始作业时间监督（每30秒拍照检测专注度）。用户说作业时间时调用。",
             PropertyList({
                 Property("minutes", kPropertyTypeInteger, 1, 180)
             }),
@@ -1817,7 +1816,7 @@ private:
                 return true;
             });
         mcp.AddTool("self.focus.stop",
-            "停止专注力监测。当用户说\"停止专注力监测\"、\"不用监督了\"时调用。",
+            "停止作业时间监督。",
             PropertyList(),
             [this](const PropertyList&) -> ReturnValue {
                 StopFocusMonitor();
