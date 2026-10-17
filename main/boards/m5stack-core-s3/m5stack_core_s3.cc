@@ -1244,9 +1244,8 @@ public:
         auto state = Application::GetInstance().GetDeviceState();
         if (state == kDeviceStateListening || state == kDeviceStateSpeaking) {
             if (face_tracker_) face_tracker_->Resume();
-        } else if (state == kDeviceStateIdle) {
-            if (face_tracker_) face_tracker_->Pause();
         }
+        /* 空闲时也保持人脸追踪（用户希望机器人一直看着他），仅在睡眠表情时暂停 */
         bool is_active = (strstr(status, "聆听")
                        || strstr(status, "说话")
                        || strstr(status, "思考")
