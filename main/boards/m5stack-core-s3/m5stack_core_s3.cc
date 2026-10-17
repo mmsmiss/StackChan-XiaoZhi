@@ -1443,6 +1443,11 @@ private:
     Ft6336* ft6336_;
     LcdDisplay* display_;
     EspVideo* camera_;
+
+    /* 专注力监测状态 */
+    volatile bool focus_running_ = false;
+    TaskHandle_t focus_task_ = nullptr;
+    uint32_t focus_end_ms_ = 0;
     StackChanServo servo_;
     FaceTracker face_tracker_;
     esp_timer_handle_t touchpad_timer_;
@@ -1794,6 +1799,65 @@ private:
             }
             si12t_last_state_ = out;
         }
+    }
+
+    /* ==================== 专注力监测 ==================== */
+
+    void RegisterFocusMcpTool() {
+        auto& mcp = McpServer::GetInstance();
+        mcp.AddTool("self.focus.start",
+            "开始专注力监测：机器人会每 30 秒拍一张照片，分析孩子是否在专注学习。"
+            "当用户说\"开始专注力监测\"、\"监督我学习\"时调用。",
+            PropertyList({
+                Property("minutes", kPropertyTypeInteger, 1, 180)
+            }),
+            [this](const PropertyList& p) -> ReturnValue {
+                int mins = p["minutes"].value<int>();
+                StartFocusMonitor(mins);
+                return true;
+            });
+        mcp.AddTool("self.focus.stop",
+            "停止专注力监测。当用户说\"停止专注力监测\"、\"不用监督了\"时调用。",
+            PropertyList(),
+            [this](const PropertyList&) -> ReturnValue {
+                StopFocusMonitor();
+                return true;
+            });
+    }
+
+    void StartFocusMonitor(int minutes) {
+        StopFocusMonitor();
+        focus_end_ms_ = (uint32_t)(esp_timer_get_time() / 1000 + (int64_t)minutes * 60000);
+        focus_running_ = true;
+        xTaskCreate(&FocusMonitorTask, "focus_mon", 8192, this, 2, &focus_task_);
+        ESP_LOGI(TAG, "Focus monitor started for %d min", minutes);
+    }
+
+    void StopFocusMonitor() {
+        focus_running_ = false;
+        if (focus_task_) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            focus_task_ = nullptr;
+        }
+    }
+
+    static void FocusMonitorTask(void* arg) {
+        auto* self = static_cast<M5StackCoreS3Board*>(arg);
+        while (self->focus_running_ &&
+               (uint32_t)(esp_timer_get_time() / 1000) < self->focus_end_ms_) {
+            if (self->camera_ && self->camera_->IsOk()) {
+                if (self->camera_->Capture()) {
+                    try {
+                        self->camera_->Explain("专注力检测");
+                    } catch (...) {
+                    }
+                }
+            }
+            vTaskDelay(pdMS_TO_TICKS(30000));
+        }
+        self->focus_running_ = false;
+        self->focus_task_ = nullptr;
+        vTaskDelete(nullptr);
     }
 
     void RegisterExpressionMcpTool() {
@@ -2343,6 +2407,7 @@ public:
         avatar_display->SetLedUpdater([this](const char* emotion) {
             UpdateLedsFromEmotion(emotion);
         });
+        RegisterFocusMcpTool();
         InitializeFt6336TouchPad();
         InitializeBmi270();
         InitializeSi12T();
