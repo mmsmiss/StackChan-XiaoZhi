@@ -1806,8 +1806,8 @@ private:
     void RegisterFocusMcpTool() {
         auto& mcp = McpServer::GetInstance();
         mcp.AddTool("self.focus.start",
-            "开始专注力监测：机器人会每 30 秒拍一张照片，分析孩子是否在专注学习。"
-            "当用户说\"开始专注力监测\"、\"监督我学习\"时调用。",
+            "开始专注力监测（作业时间）：机器人会每 30 秒拍一张照片，分析孩子是否在专注写作业。"
+            "当用户说\"作业时间\"、\"开始作业时间\"、\"写作业时间\"、\"开始专注力监测\"、\"监督我学习\"时调用。",
             PropertyList({
                 Property("minutes", kPropertyTypeInteger, 1, 180)
             }),
