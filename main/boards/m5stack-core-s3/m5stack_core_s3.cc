@@ -1843,15 +1843,32 @@ private:
 
     static void FocusMonitorTask(void* arg) {
         auto* self = static_cast<M5StackCoreS3Board*>(arg);
+        int no_person_count = 0;  /* 连续无人的次数，30 次 = 15 分钟 */
         while (self->focus_running_ &&
                (uint32_t)(esp_timer_get_time() / 1000) < self->focus_end_ms_) {
             if (self->camera_ && self->camera_->IsOk()) {
                 if (self->camera_->Capture()) {
                     try {
-                        self->camera_->Explain("专注力检测");
+                        std::string resp = self->camera_->Explain("专注力检测");
+                        /* 解析服务端返回的 focus.has_person */
+                        size_t pos = resp.find("has_person");
+                        if (pos != std::string::npos) {
+                            size_t t = resp.find("true", pos);
+                            size_t f = resp.find("false", pos);
+                            if (f != std::string::npos && (t == std::string::npos || f < t)) {
+                                no_person_count++;
+                            } else if (t != std::string::npos) {
+                                no_person_count = 0;
+                            }
+                        }
                     } catch (...) {
                     }
                 }
+            }
+            /* 连续 15 分钟（30 次）没人 → 自动停止 */
+            if (no_person_count >= 30) {
+                ESP_LOGI(TAG, "Focus monitor: no person for 15 min, auto stop");
+                break;
             }
             vTaskDelay(pdMS_TO_TICKS(30000));
         }
